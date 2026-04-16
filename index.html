@@ -3,490 +3,301 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Shooter - Nave Espacial</title>
+    <title>Space Shooter: Starfox Vibe</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #000;
-            color: #fff;
-            font-family: 'Courier New', monospace;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            flex-direction: column;
-        }
-        canvas {
-            image-rendering: pixelated;
-            border: 4px solid #0ff;
-            box-shadow: 0 0 30px #0ff;
-        }
-        #hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 20px;
-            text-shadow: 0 0 10px #0ff;
-            pointer-events: none;
-        }
-        #game-over {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 60px;
-            color: #f00;
-            text-shadow: 0 0 20px #f00;
-            display: none;
-            text-align: center;
-        }
-        #instructions {
-            position: absolute;
-            bottom: 20px;
-            font-size: 18px;
-            text-align: center;
-            width: 100%;
-        }
-        button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 18px;
-            background: #0ff;
-            color: #000;
-            border: none;
-            cursor: pointer;
-        }
+        body { margin: 0; background-color: #050510; color: white; font-family: 'Courier New', Courier, monospace; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { box-shadow: 0 0 30px rgba(0, 150, 255, 0.4); border: 2px solid #225; background: radial-gradient(circle at center, #112 0%, #000 100%); }
+        #ui-layer { position: absolute; width: 600px; height: 800px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box; }
+        .hud-text { font-size: 20px; font-weight: bold; text-shadow: 2px 2px 0 #000; color: #0cf; }
+        
+        #menu { position: absolute; width: 600px; height: 800px; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: auto; }
+        h1 { font-size: 40px; color: #fff; text-transform: uppercase; letter-spacing: 5px; text-shadow: 0 0 10px #0cf; text-align: center;}
+        button { background: transparent; border: 2px solid #0cf; color: #0cf; padding: 15px 40px; margin: 10px; font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.3s; text-transform: uppercase; }
+        button:hover { background: #0cf; color: #000; box-shadow: 0 0 20px #0cf; }
     </style>
 </head>
 <body>
-    <canvas id="game" width="800" height="600"></canvas>
-    
-    <div id="hud">
-        <div>Puntuación: <span id="score">0</span></div>
-        <div>Nivel: <span id="level">1</span></div>
-        <div>Vidas: <span id="lives">3</span></div>
-    </div>
 
-    <div id="game-over">
-        GAME OVER<br>
-        <span style="font-size: 30px;">Presiona R para reiniciar</span>
-    </div>
-
-    <div id="instructions">
-        ← → (o A/D) : Mover • ESPACIO : Disparar • W/S : Mover arriba/abajo<br>
-        ¡Destruye enemigos y jefes! Cada 3 niveles aparece un jefe final.
-    </div>
-
-    <script>
-        const canvas = document.getElementById('game');
-        const ctx = canvas.getContext('2d');
+    <div style="position: relative;">
+        <canvas id="gameCanvas" width="600" height="800"></canvas>
         
-        const WIDTH = 800;
-        const HEIGHT = 600;
-        const FPS = 60;
+        <div id="ui-layer" style="display: none;">
+            <div style="display: flex; justify-content: space-between;">
+                <span class="hud-text" id="scoreDisplay">Puntos: 0</span>
+                <span class="hud-text" id="levelDisplay">Nivel: 1</span>
+            </div>
+            <div style="text-align: center;">
+                <span class="hud-text" id="bossWarning" style="color: red; font-size: 30px; display: none;">¡PELIGRO: JEFE APROXIMÁNDOSE!</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span class="hud-text" id="hpDisplay">HP: 3</span>
+                <span class="hud-text" id="modeDisplay">Modo</span>
+            </div>
+        </div>
 
-        let score = 0;
-        let lives = 3;
-        let level = 1;
-        let gameOver = false;
-        let lastTime = 0;
+        <div id="menu">
+            <h1>Starflight<br>Assault</h1>
+            <p>Controles: WASD / Flechas | Espacio: Disparar</p>
+            <button onclick="startGame('story')">Modo Historia</button>
+            <button onclick="startGame('loop')">Modo Loop</button>
+        </div>
+    </div>
 
-        // Jugador
-        let player = {
-            x: WIDTH / 2 - 25,
-            y: HEIGHT - 80,
-            width: 50,
-            height: 40,
-            speed: 8,
-            lastShot: 0,
-            shotDelay: 180
-        };
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const menu = document.getElementById("menu");
+    const uiLayer = document.getElementById("ui-layer");
+    
+    // UI Elements
+    const scoreDisplay = document.getElementById("scoreDisplay");
+    const levelDisplay = document.getElementById("levelDisplay");
+    const hpDisplay = document.getElementById("hpDisplay");
+    const modeDisplay = document.getElementById("modeDisplay");
+    const bossWarning = document.getElementById("bossWarning");
 
-        // Grupos
-        let bullets = [];
-        let enemyBullets = [];
-        let enemies = [];
-        let boss = null;
+    // Variables
+    let gameLoop, score, level, enemiesDefeated, hp, gameMode, bossActive;
+    let bullets = [], enemies = [], stars = [];
+    let keys = {};
 
-        // Estrellas de fondo
-        let stars = [];
-        for (let i = 0; i < 120; i++) {
-            stars.push({
-                x: Math.random() * WIDTH,
-                y: Math.random() * HEIGHT,
-                size: Math.random() * 3 + 1,
-                speed: Math.random() * 3 + 2
-            });
+    // Controles (Soporta WASD y Flechas)
+    document.addEventListener("keydown", (e) => { keys[e.key.toLowerCase()] = true; if(e.code === "Space") e.preventDefault(); });
+    document.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+
+    // --- EFECTO PSEUDO-3D DE ESTRELLAS ---
+    class Star {
+        constructor() {
+            this.reset();
+            this.z = Math.random() * canvas.width; // Empezar repartidas
         }
-
-        // Teclas
-        let keys = {};
-
-        window.addEventListener('keydown', e => {
-            keys[e.key.toLowerCase()] = true;
-            if (gameOver && e.key.toLowerCase() === 'r') resetGame();
-        });
-        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-        // Crear enemigo normal
-        function createEnemy() {
-            return {
-                x: Math.random() * (WIDTH - 40),
-                y: -50 - Math.random() * 100,
-                width: 40,
-                height: 30,
-                speed: 3 + level * 0.6,
-                type: 'enemy',
-                lastShot: Date.now() - Math.random() * 800,
-                shotDelay: Math.max(600, 1100 - level * 80)
-            };
+        reset() {
+            this.x = (Math.random() - 0.5) * canvas.width * 2;
+            this.y = (Math.random() - 0.5) * canvas.height * 2;
+            this.z = canvas.width;
         }
-
-        // Crear jefe
-        function createBoss() {
-            return {
-                x: WIDTH / 2 - 50,
-                y: -80,
-                width: 100,
-                height: 80,
-                speedX: 3.5 + level * 0.4,
-                speedY: 1.5,
-                health: 12 + level * 7,
-                type: 'boss',
-                lastShot: Date.now(),
-                shotDelay: 380
-            };
+        update() {
+            this.z -= 5 + (level * 0.5); // Más rápido al subir de nivel
+            if (this.z <= 0) this.reset();
         }
+        draw() {
+            let px = (this.x / this.z) * 300 + canvas.width / 2;
+            let py = (this.y / this.z) * 300 + canvas.height / 2;
+            let radius = Math.max(0.5, (canvas.width - this.z) / 200);
 
-        // Crear bala del jugador
-        function shoot() {
-            const now = Date.now();
-            if (now - player.lastShot > player.shotDelay) {
-                player.lastShot = now;
-                bullets.push({
-                    x: player.x + player.width / 2 - 3,
-                    y: player.y,
-                    width: 6,
-                    height: 20,
-                    speed: -14
-                });
-            }
-        }
-
-        // Crear bala enemiga
-        function enemyShoot(enemy) {
-            const now = Date.now();
-            if (now - enemy.lastShot > enemy.shotDelay) {
-                enemy.lastShot = now;
-                if (enemy.type === 'boss') {
-                    // Jefe dispara 3 balas en abanico
-                    for (let i = -1; i <= 1; i++) {
-                        enemyBullets.push({
-                            x: enemy.x + enemy.width / 2,
-                            y: enemy.y + enemy.height,
-                            width: 10,
-                            height: 22,
-                            speed: 7,
-                            dx: i * 2.2
-                        });
-                    }
-                } else {
-                    enemyBullets.push({
-                        x: enemy.x + enemy.width / 2 - 4,
-                        y: enemy.y + enemy.height,
-                        width: 8,
-                        height: 18,
-                        speed: 6,
-                        dx: 0
-                    });
-                }
-            }
-        }
-
-        // Spawnear oleada según nivel
-        function spawnWave() {
-            enemies = [];
-            boss = null;
-
-            const numEnemies = 5 + level * 3;
-            for (let i = 0; i < numEnemies; i++) {
-                enemies.push(createEnemy());
-            }
-
-            // Jefe cada 3 niveles (al final del nivel)
-            if (level % 3 === 0) {
-                setTimeout(() => {
-                    if (!gameOver) {
-                        boss = createBoss();
-                        // Removemos un par de enemigos para que el jefe sea el foco
-                        enemies.splice(0, 3);
-                    }
-                }, 1800);
-            }
-        }
-
-        // Reiniciar juego completo
-        function resetGame() {
-            score = 0;
-            lives = 3;
-            level = 1;
-            gameOver = false;
-            bullets = [];
-            enemyBullets = [];
-            enemies = [];
-            boss = null;
-            player.x = WIDTH / 2 - 25;
-            player.y = HEIGHT - 80;
-            document.getElementById('game-over').style.display = 'none';
-            spawnWave();
-        }
-
-        // Colisiones
-        function checkCollisions() {
-            // Balas jugador vs enemigos
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                
-                // Contra enemigos normales
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    const e = enemies[j];
-                    if (b.x < e.x + e.width && b.x + b.width > e.x &&
-                        b.y < e.y + e.height && b.y + b.height > e.y) {
-                        bullets.splice(i, 1);
-                        enemies.splice(j, 1);
-                        score += 15;
-                        break;
-                    }
-                }
-                
-                // Contra jefe
-                if (boss && b.x < boss.x + boss.width && b.x + b.width > boss.x &&
-                    b.y < boss.y + boss.height && b.y + b.height > boss.y) {
-                    bullets.splice(i, 1);
-                    boss.health -= 1;
-                    score += 25;
-                    if (boss.health <= 0) {
-                        boss = null;
-                        score += 300 * level;
-                    }
-                }
-            }
-
-            // Balas enemigas vs jugador
-            for (let i = enemyBullets.length - 1; i >= 0; i--) {
-                const eb = enemyBullets[i];
-                if (eb.x < player.x + player.width && eb.x + eb.width > player.x &&
-                    eb.y < player.y + player.height && eb.y + eb.height > player.y) {
-                    enemyBullets.splice(i, 1);
-                    lives--;
-                    if (lives <= 0) {
-                        gameOver = true;
-                        document.getElementById('game-over').style.display = 'block';
-                    }
-                }
-            }
-
-            // Enemigos chocan con jugador
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const e = enemies[i];
-                if (e.x < player.x + player.width && e.x + e.width > player.x &&
-                    e.y < player.y + player.height && e.y + e.height > player.y) {
-                    lives--;
-                    enemies.splice(i, 1);
-                    if (lives <= 0) {
-                        gameOver = true;
-                        document.getElementById('game-over').style.display = 'block';
-                    }
-                }
-            }
-
-            // Jefe choca con jugador
-            if (boss && boss.x < player.x + player.width && boss.x + boss.width > player.x &&
-                boss.y < player.y + player.height && boss.y + boss.height > player.y) {
-                lives -= 2;
-                boss = null;
-                if (lives <= 0) {
-                    gameOver = true;
-                    document.getElementById('game-over').style.display = 'block';
-                }
-            }
-        }
-
-        // Actualizar juego
-        function update() {
-            if (gameOver) return;
-
-            // Movimiento jugador
-            if ((keys['arrowleft'] || keys['a']) && player.x > 0) player.x -= player.speed;
-            if ((keys['arrowright'] || keys['d']) && player.x < WIDTH - player.width) player.x += player.speed;
-            if ((keys['arrowup'] || keys['w']) && player.y > 50) player.y -= player.speed;
-            if ((keys['arrowdown'] || keys['s']) && player.y < HEIGHT - player.height - 10) player.y += player.speed;
-
-            // Disparo
-            if (keys[' '] ) shoot();
-
-            // Actualizar balas jugador
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                bullets[i].y += bullets[i].speed;
-                if (bullets[i].y < -20) bullets.splice(i, 1);
-            }
-
-            // Actualizar balas enemigas
-            for (let i = enemyBullets.length - 1; i >= 0; i--) {
-                const eb = enemyBullets[i];
-                eb.y += eb.speed;
-                if (eb.dx) eb.x += eb.dx;
-                if (eb.y > HEIGHT + 20) enemyBullets.splice(i, 1);
-            }
-
-            // Actualizar enemigos normales
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const e = enemies[i];
-                e.y += e.speed;
-                
-                // Disparo enemigo
-                enemyShoot(e);
-                
-                // Si se sale de pantalla
-                if (e.y > HEIGHT + 50) enemies.splice(i, 1);
-            }
-
-            // Actualizar jefe
-            if (boss) {
-                boss.x += boss.speedX;
-                if (boss.x <= 20 || boss.x >= WIDTH - boss.width - 20) boss.speedX *= -1;
-                
-                if (boss.y < 80) boss.y += boss.speedY;
-                
-                enemyShoot(boss);
-            }
-
-            // Avanzar de nivel cuando no queden enemigos ni jefe
-            if (enemies.length === 0 && !boss) {
-                level++;
-                spawnWave();
-            }
-
-            checkCollisions();
-
-            // Actualizar HUD
-            document.getElementById('score').textContent = score;
-            document.getElementById('level').textContent = level;
-            document.getElementById('lives').textContent = lives;
-        }
-
-        // Dibujar todo
-        function draw() {
-            ctx.fillStyle = '#000011';
-            ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-            // Estrellas
-            ctx.fillStyle = '#ffffff';
-            for (let star of stars) {
-                ctx.globalAlpha = Math.random() * 0.4 + 0.6;
-                ctx.fillRect(star.x, star.y, star.size, star.size);
-                star.y += star.speed;
-                if (star.y > HEIGHT) {
-                    star.y = 0;
-                    star.x = Math.random() * WIDTH;
-                }
-            }
-            ctx.globalAlpha = 1;
-
-            // Dibujar jugador (nave triangular)
-            ctx.fillStyle = '#00ffff';
-            ctx.strokeStyle = '#00ffff';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(player.x + player.width / 2, player.y);
-            ctx.lineTo(player.x, player.y + player.height);
-            ctx.lineTo(player.x + player.width, player.y + player.height);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-
-            // Dibujar balas jugador (láser verde)
-            ctx.fillStyle = '#0f0';
-            for (let b of bullets) {
-                ctx.fillRect(b.x, b.y, b.width, b.height);
-            }
-
-            // Dibujar balas enemigas
-            ctx.fillStyle = '#ff3300';
-            for (let eb of enemyBullets) {
-                ctx.fillRect(eb.x, eb.y, eb.width, eb.height);
-            }
-
-            // Dibujar enemigos normales (naves rojas)
-            ctx.fillStyle = '#ff0000';
-            ctx.strokeStyle = '#ff8800';
-            for (let e of enemies) {
-                ctx.save();
-                ctx.translate(e.x + e.width / 2, e.y + e.height / 2);
+            if (px >= 0 && px <= canvas.width && py >= 0 && py <= canvas.height) {
+                ctx.fillStyle = "rgba(255, 255, 255, " + (1 - this.z / canvas.width) + ")";
                 ctx.beginPath();
-                ctx.moveTo(0, -15);
-                ctx.lineTo(-20, 15);
-                ctx.lineTo(20, 15);
-                ctx.closePath();
+                ctx.arc(px, py, radius, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.stroke();
-                ctx.restore();
             }
+        }
+    }
+    for(let i=0; i<200; i++) stars.push(new Star());
 
-            // Dibujar jefe (nave grande naranja)
-            if (boss) {
-                ctx.fillStyle = '#ff9900';
-                ctx.strokeStyle = '#ffff00';
-                ctx.lineWidth = 6;
-                ctx.save();
-                ctx.translate(boss.x + boss.width / 2, boss.y + boss.height / 2);
-                ctx.beginPath();
-                ctx.moveTo(0, -35);
-                ctx.lineTo(-50, 35);
-                ctx.lineTo(50, 35);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-                
-                // Detalle de jefe
-                ctx.fillStyle = '#ffff00';
-                ctx.fillRect(-15, -10, 30, 15);
-                ctx.restore();
-                
+    // --- CLASES DEL JUEGO ---
+    class Player {
+        constructor() {
+            this.width = 50; this.height = 40;
+            this.x = canvas.width / 2 - this.width / 2;
+            this.y = canvas.height - 80;
+            this.speed = 7;
+            this.cooldown = 0;
+            this.tilt = 0; // Para animación de giro
+        }
+        draw() {
+            ctx.save();
+            ctx.translate(this.x + this.width/2, this.y + this.height/2);
+            ctx.rotate(this.tilt * Math.PI / 180);
+
+            // Dibujar nave tipo Arwing (geometría)
+            ctx.fillStyle = "#ddd";
+            ctx.beginPath(); ctx.moveTo(0, -this.height/2); ctx.lineTo(this.width/2, this.height/2); ctx.lineTo(-this.width/2, this.height/2); ctx.closePath(); ctx.fill();
+            // Cabina
+            ctx.fillStyle = "#0cf";
+            ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(8, 10); ctx.lineTo(-8, 10); ctx.closePath(); ctx.fill();
+            // Alas / Propulsores
+            ctx.fillStyle = "#f50";
+            ctx.fillRect(-this.width/2 - 5, this.height/2 - 10, 10, 15);
+            ctx.fillRect(this.width/2 - 5, this.height/2 - 10, 10, 15);
+            
+            ctx.restore();
+        }
+        update() {
+            this.tilt = 0;
+            if ((keys['a'] || keys['arrowleft']) && this.x > 0) { this.x -= this.speed; this.tilt = -15; }
+            if ((keys['d'] || keys['arrowright']) && this.x + this.width < canvas.width) { this.x += this.speed; this.tilt = 15; }
+            if ((keys['w'] || keys['arrowup']) && this.y > 0) this.y -= this.speed;
+            if ((keys['s'] || keys['arrowdown']) && this.y + this.height < canvas.height) this.y += this.speed;
+
+            if (this.cooldown > 0) this.cooldown--;
+            if ((keys[' '] || keys['space']) && this.cooldown === 0) {
+                bullets.push(new Bullet(this.x + this.width / 2 - 3, this.y, -12));
+                this.cooldown = 12;
+            }
+        }
+    }
+
+    class Bullet {
+        constructor(x, y, speedY) { this.x = x; this.y = y; this.width = 6; this.height = 15; this.speedY = speedY; }
+        draw() { ctx.fillStyle = "#0f0"; ctx.shadowBlur = 10; ctx.shadowColor = "#0f0"; ctx.fillRect(this.x, this.y, this.width, this.height); ctx.shadowBlur = 0; }
+        update() { this.y += this.speedY; }
+    }
+
+    class Enemy {
+        constructor(isBoss = false) {
+            this.isBoss = isBoss;
+            this.width = isBoss ? 200 : 40;
+            this.height = isBoss ? 120 : 40;
+            this.x = isBoss ? canvas.width/2 - this.width/2 : Math.random() * (canvas.width - this.width);
+            this.y = -this.height - 20;
+            this.speedX = isBoss ? 3 : (Math.random() - 0.5) * 2;
+            this.speedY = isBoss ? 0.5 : 3 + (level * 0.5);
+            this.maxHp = isBoss ? 30 + (level * 10) : 1 + Math.floor(level/3);
+            this.hp = this.maxHp;
+            this.shootTimer = 0;
+        }
+        draw() {
+            ctx.fillStyle = this.isBoss ? "#900" : "#555";
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            
+            // Detalles de la nave enemiga
+            ctx.fillStyle = "#f00";
+            if(this.isBoss) {
+                ctx.fillRect(this.x + 20, this.y + this.height - 10, 40, 20);
+                ctx.fillRect(this.x + this.width - 60, this.y + this.height - 10, 40, 20);
                 // Barra de vida del jefe
-                const healthPercent = boss.health / (12 + level * 7);
-                ctx.fillStyle = '#00ff00';
-                ctx.fillRect(boss.x, boss.y - 20, boss.width * healthPercent, 8);
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(boss.x, boss.y - 20, boss.width, 8);
+                ctx.fillStyle = "white"; ctx.fillRect(this.x, this.y - 15, this.width, 5);
+                ctx.fillStyle = "red"; ctx.fillRect(this.x, this.y - 15, this.width * (this.hp / this.maxHp), 5);
+            } else {
+                ctx.beginPath(); ctx.moveTo(this.x + this.width/2, this.y + this.height + 10); ctx.lineTo(this.x + this.width, this.y); ctx.lineTo(this.x, this.y); ctx.closePath(); ctx.fill();
+            }
+        }
+        update() {
+            this.y += this.speedY;
+            this.x += this.speedX;
+
+            if (this.isBoss) {
+                if (this.y > 50) this.speedY = 0; // Se detiene arriba
+                if (this.x <= 0 || this.x + this.width >= canvas.width) this.speedX *= -1; // Rebota
+                
+                // Jefe dispara
+                this.shootTimer++;
+                if(this.shootTimer > 60 - level) {
+                    bullets.push(new Bullet(this.x + 40, this.y + this.height, 8));
+                    bullets.push(new Bullet(this.x + this.width - 40, this.y + this.height, 8));
+                    this.shootTimer = 0;
+                }
+            } else {
+                // Enemigos rebotan en los bordes
+                if (this.x <= 0 || this.x + this.width >= canvas.width) this.speedX *= -1;
+            }
+        }
+    }
+
+    let player;
+
+    function startGame(mode) {
+        gameMode = mode;
+        score = 0; level = 1; enemiesDefeated = 0; hp = 3; bossActive = false;
+        bullets = []; enemies = [];
+        player = new Player();
+        
+        menu.style.display = "none";
+        uiLayer.style.display = "flex";
+        modeDisplay.innerText = mode === 'story' ? "Historia" : "Loop Infinito";
+        
+        updateUI();
+        gameLoop = requestAnimationFrame(update);
+    }
+
+    function updateUI() {
+        scoreDisplay.innerText = `Puntos: ${score}`;
+        levelDisplay.innerText = `Nivel: ${level}`;
+        hpDisplay.innerText = `HP: ${hp}`;
+        if(hp <= 0) endGame("¡TE HAN DERRIBADO!");
+        if(gameMode === 'story' && level > 10) endGame("¡MISIÓN CUMPLIDA! HAS SALVADO EL SISTEMA LYLAT.");
+    }
+
+    function endGame(msg) {
+        cancelAnimationFrame(gameLoop);
+        menu.style.display = "flex";
+        uiLayer.style.display = "none";
+        bossWarning.style.display = "none";
+        menu.innerHTML = `<h1>${msg}</h1><p>Puntuación Final: ${score}</p>
+                          <button onclick="startGame('story')">Reintentar Historia</button>
+                          <button onclick="startGame('loop')">Reintentar Loop</button>`;
+    }
+
+    function checkCollision(r1, r2) {
+        return (r1.x < r2.x + r2.width && r1.x + r1.width > r2.x && r1.y < r2.y + r2.height && r1.y + r1.height > r2.y);
+    }
+
+    function update() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Fondo 3D
+        stars.forEach(s => { s.update(); s.draw(); });
+
+        player.update(); player.draw();
+
+        // Balas
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            bullets[i].update(); bullets[i].draw();
+            
+            // Colisión bala enemiga con jugador
+            if (bullets[i].speedY > 0 && checkCollision(bullets[i], player)) {
+                hp--; bullets.splice(i, 1); updateUI(); continue;
+            }
+            if (bullets[i].y < 0 || bullets[i].y > canvas.height) bullets.splice(i, 1);
+        }
+
+        // Gestión de Niveles y Jefes
+        if (!bossActive && enemiesDefeated >= 15) { // 15 enemigos por nivel
+            level++;
+            enemiesDefeated = 0;
+            updateUI();
+            
+            if (level % 5 === 0 && (gameMode === 'loop' || level <= 10)) {
+                bossWarning.style.display = "block";
+                setTimeout(() => { bossWarning.style.display = "none"; enemies.push(new Enemy(true)); bossActive = true; }, 2000);
             }
         }
 
-        // Bucle principal del juego
-        function gameLoop(timestamp) {
-            if (!lastTime) lastTime = timestamp;
-            if (timestamp - lastTime > 1000 / FPS) {
-                update();
-                draw();
-                lastTime = timestamp;
+        // Spawn Enemigos Normales
+        if (!bossActive && Math.random() < 0.03 + (level * 0.005)) enemies.push(new Enemy(false));
+
+        // Enemigos
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            enemies[i].update(); enemies[i].draw();
+
+            // Colisión con jugador
+            if (checkCollision(player, enemies[i])) {
+                hp--; enemies[i].hp -= 5; updateUI(); // Chocar hace daño
             }
-            requestAnimationFrame(gameLoop);
+
+            // Balas del jugador contra enemigos
+            for (let j = bullets.length - 1; j >= 0; j--) {
+                if (bullets[j].speedY < 0 && checkCollision(bullets[j], enemies[i])) {
+                    enemies[i].hp--; bullets.splice(j, 1);
+                    if (enemies[i].hp <= 0) {
+                        score += enemies[i].isBoss ? 1000 : 50;
+                        if (enemies[i].isBoss) {
+                            bossActive = false;
+                            enemiesDefeated = 15; // Fuerza a subir al siguiente nivel inmediatamente tras el jefe
+                        } else {
+                            enemiesDefeated++;
+                        }
+                        enemies.splice(i, 1); updateUI();
+                    }
+                    break;
+                }
+            }
+            if (enemies[i] && enemies[i].y > canvas.height) enemies.splice(i, 1);
         }
 
-        // Iniciar juego
-        function startGame() {
-            spawnWave();
-            requestAnimationFrame(gameLoop);
-        }
-
-        // Botón de reinicio (opcional)
-        window.resetGame = resetGame;
-
-        // Iniciar automáticamente
-        startGame();
-    </script>
+        if (hp > 0 && (gameMode === 'loop' || level <= 10)) gameLoop = requestAnimationFrame(update);
+    }
+</script>
 </body>
 </html>
